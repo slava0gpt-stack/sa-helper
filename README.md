@@ -233,9 +233,29 @@ flowchart TD
     style C fill:#1abc9c,color:#fff
 ```
 
+### Процесс 5: Проверка MSSQL → Babelfish
+
+`/babelfish-check` собирает полный SQL-набор выбранного метода или endpoint. Read-only `SELECT` проверяются Compass, при необходимости переписываются, подключаются как Babelfish shadow при MSSQL-primary и покрываются parity-тестами. Любой side-effecting SQL только анализируется и описывается в отчёте — без rewrite и запуска на Babelfish.
+
+```mermaid
+flowchart LR
+    S["SQL / diff / endpoint"] --> C["/babelfish-check"]
+    C --> A["Compass assessment"]
+    A --> M["MSSQL primary"]
+    A --> B["Babelfish shadow"]
+    M --> R["Клиентский результат"]
+    M --> D["Нормализация и сравнение"]
+    B --> D
+    D --> O["Compatibility report"]
+
+    style M fill:#4a9eff,color:#fff
+    style B fill:#9c36b5,color:#fff
+    style R fill:#51cf66,color:#fff
+```
+
 ---
 
-## 🛠 Доступные команды (18 команд)
+## 🛠 Доступные команды (20 команд)
 
 ### Реверс‑инжиниринг
 
@@ -255,8 +275,13 @@ flowchart TD
 
 ### Миграция на Babelfish
 
+Две команды покрывают разные половины базы и применяются по порядку: сначала `/babelfish-check`
+выясняет, совместим ли читающий путь, затем `/babelfish-port` чинит пишущий — то, что движок
+не принимает вовсе.
+
 | Команда | Описание | Результат |
 |:--------|:---------|:----------|
+| `/babelfish-check` | Разработка совместимых SELECT: Compass, rewrite, shadow и parity-тесты; записи только документируются | Изменённый read-only SQL + тесты + `sa_documentation/babelfish/<scope>-compatibility.md` |
 | `/babelfish-port` | Портирование кода БД, который Babelfish не принимает: `MERGE`, XML-методы `.nodes()`/`.query()`, `FORMATMESSAGE`, `RAISERROR` с числовым кодом. Проверяет порт запуском на двух движках, а не фактом компиляции | Переписанный объект + отчёт с вердиктом и списком краевых расхождений |
 
 ### Системные требования (FNR Pipeline)
@@ -368,6 +393,8 @@ flowchart TD
 | `discovery-analyst/` | Discovery: превращение размытой задачи в требования‑развилки и брифинг для руководства |
 | `doc-type-router/` | Маршрутизатор типов документации: редактируемая карта «тип ↔ папка ↔ признаки» |
 | `mindmap-cartographer/` | Картограф mindmap: карта погружения «от общего к частному» — оси, уровни, цвета, атомы |
+| `babelfish-compatibility/` | Babelfish, читающий путь: совместимые `SELECT`, shadow-исполнение; пишущий SQL только документируется |
+| `babelfish-porting/` | Babelfish, пишущий путь: портирование `MERGE`, XML-методов и прочего, что движок не принимает, с проверкой запуском |
 
 ---
 
@@ -392,6 +419,7 @@ sa_documentation/
 │   └── mindmaps/                   # mindmap_<ось>_<область>.md (+ _partN.md) — карты погружения
 ├── FNR/                            # кросс-сервисный задачный уровень (корень, не трогаем)
 ├── prd/  bft/                      # кросс-сервисный задачный уровень (корень, не трогаем)
+└── babelfish/                      # отчёты Compass + runtime parity по scope
 ```
 
 **Правила:**
@@ -509,6 +537,19 @@ sa_documentation/
 > Дальше — общий путь Процесса 2: `/fnr-debate` → `/fnr-system-requirements` → `/validate-doc`.
 >
 > Discovery **не пишет** в `tasks.md` — он формирует `04_action_points.md`, из которого аналитик сам переносит нужное в мастер‑план.
+
+### Проверить SQL на совместимость с Babelfish
+
+```text
+1. /babelfish-check <SQL-файл | git diff | метод | endpoint> Babelfish <целевая версия>
+2. Команда собирает полный SQL inventory и запускает официальный Compass.
+3. Несовместимые read-only SELECT минимально переписываются без изменения MSSQL-семантики.
+4. MSSQL остаётся primary, Babelfish выполняет тот же read-only запрос как shadow и не влияет на клиентский ответ.
+5. Добавляются MSSQL regression, real-engine parity, timeout/isolation и kill-switch тесты.
+6. Результат: изменённый код, тесты и sa_documentation/babelfish/<scope>-compatibility.md.
+```
+
+`INSERT/UPDATE/DELETE/MERGE`, DDL и процедуры с побочными эффектами не переписываются и не запускаются на Babelfish этой командой. Compass findings, затронутые объекты, риски и рекомендуемая будущая доработка фиксируются только в отчёте.
 
 ---
 
@@ -699,6 +740,7 @@ claude mcp add sa-helper-graph -- "$PWD\.venv\Scripts\python" indexer\server\mcp
 | `/validate-doc` | Сверка утверждений с рёбрами графа (`CALLS`, `QUERIES`, `EXTENDS`) |
 | `/fnr-*` | Структура проекта и зависимости для диагностики проблем |
 | `/discovery-*` | Blast‑radius (`impact`, `db-impact`) и gap‑finder (`call-chain`, `db-lineage`, `db-unresolved`, `db-orphans`) для поиска развилок |
+| `/babelfish-check` | Полный SQL inventory и связи приложения с таблицами, views и stored procedures |
 
 > **Fallback:** если Neo4j не запущен — команды работают через `repomix-output.xml` как раньше.
 
