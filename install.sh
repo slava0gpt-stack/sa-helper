@@ -29,7 +29,10 @@ DIM='\033[2m'
 NC='\033[0m' # No Color
 
 # --- Настройки репозитория ---
-REPO_URL="https://github.com/boboden541/sa-helper.git"
+# Рабочая копия команды. Оригинал: https://github.com/boboden541/sa-helper
+# Здесь добавлены навыки babelfish-compatibility и babelfish-porting,
+# которых в оригинале нет.
+REPO_URL="${SA_HELPER_REPO:-https://github.com/slava0gpt-stack/sa-helper.git}"
 TEMP_DIR=".sa_helper_temp"
 SOURCE_ROOT=".claude"
 

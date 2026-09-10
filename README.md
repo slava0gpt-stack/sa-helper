@@ -10,6 +10,13 @@
   <img src="https://img.shields.io/badge/MCP-13%20tools-purple" alt="13 MCP Tools">
 </p>
 
+> **Рабочая копия команды.** Форк [boboden541/sa-helper](https://github.com/boboden541/sa-helper)
+> с двумя дополнительными навыками для миграции на Babelfish — `/babelfish-check` и `/babelfish-port`.
+> В оригинале их нет: задача узкая и специфичная, общий инструмент для аналитиков ею не нагружаем.
+>
+> Установка ниже ставит **эту** версию. Чтобы поставить оригинал:
+> `SA_HELPER_REPO=https://github.com/boboden541/sa-helper.git bash install.sh`
+
 ---
 
 > **Реверс‑инжиниринг** — превращайте код в C4‑диаграммы, DataFlow, API‑спецификации и mindmap‑карты погружения.<br>
@@ -41,8 +48,8 @@
 <!-- prettier-ignore -->
 | Платформа | Команда |
 |-----------|---------|
-| **macOS / Linux** | `curl -sSL https://raw.githubusercontent.com/boboden541/sa-helper/main/install.sh \| bash` |
-| **Windows (Git Bash)** | `curl --ssl-no-revoke -sSL https://raw.githubusercontent.com/boboden541/sa-helper/main/install.sh -o /tmp/sa-install.sh && bash /tmp/sa-install.sh && rm -f /tmp/sa-install.sh` |
+| **macOS / Linux** | `curl -sSL https://raw.githubusercontent.com/slava0gpt-stack/sa-helper/main/install.sh \| bash` |
+| **Windows (Git Bash)** | `curl --ssl-no-revoke -sSL https://raw.githubusercontent.com/slava0gpt-stack/sa-helper/main/install.sh -o /tmp/sa-install.sh && bash /tmp/sa-install.sh && rm -f /tmp/sa-install.sh` |
 
 > **Обновление после правок эталонов и ресурсов.** Команды и навыки работают с **установленной** копией в вашем проекте. Если изменились эталоны (`examples/`) или ресурсы навыков (`resources/`) — запустите установку повторно, иначе установленная копия останется на прежней версии и команды продолжат работать по старым правилам.
 
@@ -72,7 +79,7 @@
 2. Запишите алиас:
 
 ```bash
-echo "alias init_sa='curl -sSL https://raw.githubusercontent.com/boboden541/sa-helper/main/install.sh -o /tmp/sa-install.sh && bash /tmp/sa-install.sh && rm -f /tmp/sa-install.sh'" >> ~/.zshrc
+echo "alias init_sa='curl -sSL https://raw.githubusercontent.com/slava0gpt-stack/sa-helper/main/install.sh -o /tmp/sa-install.sh && bash /tmp/sa-install.sh && rm -f /tmp/sa-install.sh'" >> ~/.zshrc
 ```
 
 1. Примените: `source ~/.zshrc`
@@ -84,11 +91,11 @@ echo "alias init_sa='curl -sSL https://raw.githubusercontent.com/boboden541/sa-h
 ```bash
 # zsh
 sed -i '' '/alias init_sa/d' ~/.zshrc
-echo "alias init_sa='curl -sSL https://raw.githubusercontent.com/boboden541/sa-helper/main/install.sh -o /tmp/sa-install.sh && bash /tmp/sa-install.sh && rm -f /tmp/sa-install.sh'" >> ~/.zshrc
+echo "alias init_sa='curl -sSL https://raw.githubusercontent.com/slava0gpt-stack/sa-helper/main/install.sh -o /tmp/sa-install.sh && bash /tmp/sa-install.sh && rm -f /tmp/sa-install.sh'" >> ~/.zshrc
 
 # bash — замените sed -i '' на sed -i
 sed -i '/alias init_sa/d' ~/.bashrc
-echo "alias init_sa='curl -sSL https://raw.githubusercontent.com/boboden541/sa-helper/main/install.sh -o /tmp/sa-install.sh && bash /tmp/sa-install.sh && rm -f /tmp/sa-install.sh'" >> ~/.bashrc
+echo "alias init_sa='curl -sSL https://raw.githubusercontent.com/slava0gpt-stack/sa-helper/main/install.sh -o /tmp/sa-install.sh && bash /tmp/sa-install.sh && rm -f /tmp/sa-install.sh'" >> ~/.bashrc
 ```
 
 </details>
@@ -108,7 +115,7 @@ notepad $PROFILE
 ```powershell
 function init_sa {
     $tempDir = Join-Path $env:TEMP "sa-helper-$(Get-Random)"
-    git clone --depth 1 https://github.com/boboden541/sa-helper.git $tempDir
+    git clone --depth 1 https://github.com/slava0gpt-stack/sa-helper.git $tempDir
     bash "$tempDir\install.sh"
     Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
 }
