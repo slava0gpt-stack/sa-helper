@@ -1,0 +1,111 @@
+# Стенд для проверки портирования: эталонный MS SQL и Babelfish рядом.
+#
+# Нужен потому, что инвариант навыка требует доказывать порт ЗАПУСКОМ, а не компиляцией.
+# Без эталона сравнивать не с чем.
+#
+#   docker compose up -d       поднять
+#   docker compose down -v     погасить и СТЕРЕТЬ данные
+#
+# ПЕРЕД ПЕРВЫМ ЗАПУСКОМ задать две переменные — они фиксируются при инициализации
+# и меняются только через down -v:
+#
+#   BBF_COLLATION   коллация целевой базы, в нижнем регистре
+#   BBF_MODE        single-db или multi-db
+#
+# Как узнать коллацию боевой базы:
+#   SELECT DATABASEPROPERTYEX(DB_NAME(),'Collation');
+#
+# Как выбрать режим: если код обращается к другим базам трёхчастными именами
+# (db.schema.object) — нужен multi-db, иначе такие обращения невозможны физически:
+#   SELECT * FROM sys.sql_modules WHERE definition LIKE '%<имя другой базы>.dbo.%';
+#
+# Пример для базы с кириллицей и кросс-БД обращениями:
+#   BBF_COLLATION=cyrillic_general_ci_as BBF_MODE=multi-db docker compose up -d
+
+name: bbf-bench
+
+services:
+
+  # ────────── ЭТАЛОН ──────────
+  # Настраивается под целевую базу: та же коллация, тот же уровень совместимости.
+  # На Apple Silicon идёт через Rosetta, старт около 10 секунд.
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    platform: linux/amd64
+    container_name: bbf-bench-mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_PASSWORD:-Str0ng!Passw0rd}"
+      MSSQL_PID: Developer
+      # БЕЗ ЭТОЙ СТРОКИ образ ставит SQL_Latin1_General_CP1_CI_AS,
+      # и кириллица в varchar молча превращается в '?'.
+      MSSQL_COLLATION: "${MSSQL_COLLATION:-Cyrillic_General_CI_AS}"
+    ports:
+      - "${MSSQL_PORT:-24333}:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # ────────── ПРОВЕРЯЕМЫЙ ──────────
+  # Два порта: 1433 — TDS/T-SQL, 5432 — нативный PostgreSQL к тем же данным.
+  # Второй нужен для нативных функций XML-шреддинга: из T-SQL их не создать.
+  babelfish:
+    image: "${BBF_IMAGE:-babelfish:5.4.0}"
+    container_name: bbf-bench-bbf
+    environment:
+      BBF_USER: "${BBF_USER:-babelfish_user}"
+      BBF_PASSWORD: "${BBF_PASSWORD:-Bbf!Passw0rd}"
+      # Режим фиксируется на bootstrap и меняется ТОЛЬКО через down -v.
+      BBF_MIGRATION_MODE: "${BBF_MODE:-single-db}"
+      # Имя переменной именно BBF_SERVER_COLLATION.
+      # Вариант BBF_COLLATION entrypoint ИГНОРИРУЕТ молча и оставляет
+      # sql_latin1_general_cp1_ci_as — проверяется через SERVERPROPERTY('Collation').
+      BBF_SERVER_COLLATION: "${BBF_COLLATION:-sql_latin1_general_cp1_ci_as}"
+    ports:
+      - "${BBF_TDS_PORT:-21433}:1433"
+      - "${BBF_PG_PORT:-25433}:5432"
+    volumes:
+      - bbf-data:/var/lib/babelfish
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d babelfish_db || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+volumes:
+  mssql-data:
+  bbf-data:
+
+# ────────── ПОСЛЕ ПОДЪЁМА ──────────
+#
+# 1. Выставить escape hatch — БЕЗ НИХ СХЕМА НЕ НАКАТИТСЯ.
+#    Только через sp_babelfish_configure: ALTER SYSTEM их не принимает.
+#    НЕ переживают пересоздание контейнера — выставлять каждый раз.
+#
+#      for h in escape_hatch_for_replication escape_hatch_rowversion \
+#               escape_hatch_nocheck_add_constraint escape_hatch_nocheck_existing_constraint; do
+#        sqlcmd -S tcp:localhost,21433 -U babelfish_user -N disable -C \
+#          -Q "EXEC sp_babelfish_configure '$h','ignore','server'"
+#      done
+#
+# 2. Проверить, что коллация встала как задумано:
+#      sqlcmd ... -Q "SELECT SERVERPROPERTY('Collation')"
+#    Если вернулось sql_latin1_general_cp1_ci_as вместо ожидаемого —
+#    переменная не подхватилась, нужен down -v и повторный up.
+#
+# 3. Для загрузки данных неполным срезом отключить проверки внешних ключей.
+#    ALTER TABLE ... NOCHECK CONSTRAINT ALL на Babelfish НЕ РАБОТАЕТ —
+#    принимается без ошибки и ничего не делает. Работает только так:
+#      docker exec bbf-bench-bbf psql -U postgres -d babelfish_db \
+#        -c "ALTER DATABASE babelfish_db SET session_replication_role='replica';"
+#
+#    ОБЯЗАТЕЛЬНО вернуть перед сравнением, иначе движки в неравных условиях
+#    и сравнение даст ложные расхождения:
+#      docker exec bbf-bench-bbf psql -U postgres -d babelfish_db \
+#        -c "ALTER DATABASE babelfish_db RESET session_replication_role;"
